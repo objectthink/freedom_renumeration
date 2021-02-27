@@ -12,35 +12,78 @@ class CardReader
 {
     //return chip data
     //assume that the data is cached and that this is a short, synchronous operation
-    func getChipData() -> [(Int32, String, String)]
+    func getChipData() -> [(tag: Int32, description: String, value: String)]
     {
         //return chip data
         return [
-            (0x9f12, "Application Preferred Name"   ,"MasterCard"),
+            (0x9f12, "Application Preferred Name"   , "MasterCard"),
             (0x5f20, "Cardholder Name"              , "James Smith"),
             (0x5f28, "Issuer Country Code"          , "0840")
         ]
     }
 }
 
-protocol ProcessTransactionDelegate
-{
-}
-
 class Processor
 {
-    var delegate: ProcessTransactionDelegate?
+    private func containsTag(chipData: [(Int32, String, String)], tag: Int32) -> Bool
+    {
+        var found: Bool = false
+        chipData.forEach
+        { (tagValue, _, _) in
+            if tagValue == tag
+            {
+                found = true
+            }
+        }
+        
+        return found
+    }
     
+    func processTransaction(transaction: (amount: Int, chipData: [(Int32, String, String)] ), completion: @escaping (Bool)->()) -> Bool
+    {
+        //did we get the right number of tags?
+        guard transaction.chipData.count == 3 else {
+            completion(false)
+            return false
+        }
+        
+        //did we get the APN
+        guard containsTag(chipData: transaction.chipData, tag: 0x9f12) else {
+            completion(false)
+            return false
+        }
+        
+        //did we get the cardholder name
+        guard containsTag(chipData: transaction.chipData, tag: 0x5f20) else {
+            completion(false)
+            return false
+        }
+        
+        //did we get the country code
+        guard containsTag(chipData: transaction.chipData, tag: 0x5f28) else {
+            completion(false)
+            return false
+        }
+        
+        let seconds = 5.0
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds)
+        {
+            completion(true)
+        }
+        
+        return true
+    }
 }
 
 protocol DataServiceDelegateProtocol
 {
+    func dataServiceStatus(status: String)
 }
 
 protocol DataServiceProtocol
 {
-    func startTransaction(TransactionAmountInCents amount: Int) -> [(Int32, String, String)]
-    func processTransaction()
+    func startTransaction(TransactionAmountInCents amount: Int) -> (amount: Int, chipData: [(Int32, String, String)])
+    func processTransaction(transaction: (amount: Int, chipData: [(Int32, String, String)] ), completion: @escaping (Bool)->()) -> Bool
 }
 
 class DataService: DataServiceProtocol
@@ -49,18 +92,23 @@ class DataService: DataServiceProtocol
     var _transactionAmountInCents: Int?
     
     //take   transaction amount in cents
-    //return tuple of chip data
-    func startTransaction(TransactionAmountInCents amount: Int) -> [(Int32, String, String)] {
+    //return tuple of amount and chip data
+    func startTransaction(TransactionAmountInCents amount: Int) -> (amount: Int, chipData: [(Int32, String, String)]) {
+        delegate?.dataServiceStatus(status: "start transaction")
         
         //set transaction amount
         _transactionAmountInCents = amount
         
         //return chip data returned from card reader
-        return (_cardReader?.getChipData())!
+        return (amount: _transactionAmountInCents!, chipData: (_cardReader?.getChipData())!)
     }
     
-    func processTransaction() {
+    func processTransaction(transaction: (amount: Int, chipData: [(Int32, String, String)]), completion: @escaping (Bool)->()) -> Bool
+    {
+        delegate?.dataServiceStatus(status: "process transaction")
+        let processor = Processor()
         
+        return processor.processTransaction(transaction: transaction, completion: completion)
     }
     
     var _cardReader: CardReader?
@@ -80,8 +128,14 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
     @IBOutlet weak var _applicationPreferredNameLabel: UILabel!
     @IBOutlet weak var _nameLabel: UILabel!
     @IBOutlet weak var _countryLabel: UILabel!
+    @IBOutlet weak var _dataServiceStatus: UILabel!
+    @IBOutlet weak var _busyIndicator: UIActivityIndicatorView!
     
     var _dataService: DataService?
+    
+    func dataServiceStatus(status: String) {
+        _dataServiceStatus.text = status
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -112,8 +166,6 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
         _amountText.resignFirstResponder()
         _submitButton.isEnabled = false
         
-        //validate  input here
-        
         //start transaction
         let amount = Float(_amountText.text!)
         let amountAsCents: Int = Int(amount! * Float(100))
@@ -122,9 +174,9 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
         print("\(amountAsCents)")
 
         //call start transaction and update ui
-        let chipData = _dataService?.startTransaction(TransactionAmountInCents: amountAsCents)
+        let returnData = _dataService?.startTransaction(TransactionAmountInCents: amountAsCents)
         
-        chipData!.forEach { (tag, description, value) in
+        returnData?.chipData.forEach { (tag, description, value) in
             if(tag == 0x9f12)
             {
                 _applicationPreferredNameLabel.text = value
@@ -143,7 +195,7 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
         
         let prompt = UIAlertController(
             title: "Send",
-            message: "Is this information correct?\namount: \(amount!)",
+            message: "Is this information correct?\namount: \(amount!)\nname:\(_nameLabel.text!)",
             preferredStyle: UIAlertController.Style.alert)
 
         prompt.addAction(
@@ -153,8 +205,48 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
                 handler: { (action: UIAlertAction!) in
                     print("OK")
                     
+                    //start spinner and disable amount field
+                    self.disableForm(disposition: true)
+                    self._busyIndicator.startAnimating()
+                    
                     //process transaction
-                    self._dataService?.processTransaction()
+                    //invalid transaction will call completion(false)
+                    _ = self._dataService?.processTransaction(transaction: returnData!)
+                    {success in
+                        print("\(success)")
+                        
+                        self._busyIndicator.stopAnimating()
+                        
+                        var promptText = ""
+                        if success
+                        {
+                            promptText = "was successful"
+                        }
+                        else
+                        {
+                            promptText = "failed"
+                        }
+                        
+                        let alert = UIAlertController(
+                            title: "Request status",
+                            message: "Your request \(promptText)",
+                            preferredStyle: UIAlertController.Style.alert)
+                        
+                        alert.addAction(
+                            UIAlertAction(
+                                title: "Ok",
+                                style: .default,
+                                handler: { (action: UIAlertAction!) in
+                                    print("OK")
+                                }))
+                            
+                        self._busyIndicator.stopAnimating()
+                        
+                        self.present(alert, animated: true, completion: nil)
+                        
+                        self.clearForm()
+                        self.disableForm(disposition: false)
+                    }
                 }))
 
         prompt.addAction(
@@ -163,9 +255,23 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
                 style: .cancel,
                 handler: { (action: UIAlertAction!) in
                     print("CANCEL")
+                    self.clearForm()
                 }))
 
         present(prompt, animated: true, completion: nil)
+    }
+    
+    func clearForm()
+    {
+        _amountText.text = ""
+        _applicationPreferredNameLabel.text = ""
+        _countryLabel.text = ""
+        _nameLabel.text = ""
+    }
+    
+    func disableForm(disposition: Bool)
+    {
+        _amountText.isEnabled = !disposition
     }
     
 }
