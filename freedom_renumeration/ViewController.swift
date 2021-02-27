@@ -7,10 +7,12 @@
 
 import UIKit
 
-// MARK: - DATA SERVICE
+// MARK: - CARD READER
+///class CardReader
+///mock card reader
 class CardReader
 {
-    //return chip data
+    //returns chip data as an array of tuples of ( In32, String, String ) ]
     //assume that the data is cached and that this is a short, synchronous operation
     func getChipData() -> [(tag: Int32, description: String, value: String)]
     {
@@ -23,9 +25,13 @@ class CardReader
     }
 }
 
+// MARK: - PAYMENT PROCESSOR
+///class Processor
+///mock payment processor
 class Processor
 {
-    private func containsTag(chipData: [(Int32, String, String)], tag: Int32) -> Bool
+    //returns true if the passed tag is found in the passed tuple
+    func containsTag(chipData: [(Int32, String, String)], tag: Int32) -> Bool
     {
         var found: Bool = false
         chipData.forEach
@@ -39,6 +45,10 @@ class Processor
         return found
     }
     
+    /// process a payment transaction
+    /// - Parameter transaction: tuple( amount, chipData)
+    /// - Parameter completion: escaping completion handler that takes bool
+    /// - Returns: true if valid transaction, otherwise false
     func processTransaction(transaction: (amount: Int, chipData: [(Int32, String, String)] ), completion: @escaping (Bool)->()) -> Bool
     {
         //did we get the right number of tags?
@@ -75,17 +85,30 @@ class Processor
     }
 }
 
+// MARK: - DATASERVICE
 protocol DataServiceDelegateProtocol
 {
+    /// call delegate with status string
+    /// - Parameter status string
     func dataServiceStatus(status: String)
 }
 
+/// data service protocol
+/// has-a card reader and transaction processor
 protocol DataServiceProtocol
 {
+    /// start a transaction
+    /// - Parameter TransactionAmountInCents transaction amount in cents
+    /// - Returns: tuple of amount and chipdata which is array of tuple ( tag, string, string ) acquired from card reader
     func startTransaction(TransactionAmountInCents amount: Int) -> (amount: Int, chipData: [(Int32, String, String)])
+    
+    /// process transaction using transaction processor
+    /// - Parameter transaction
+    /// - Parameter escaping completion handler
     func processTransaction(transaction: (amount: Int, chipData: [(Int32, String, String)] ), completion: @escaping (Bool)->()) -> Bool
 }
 
+/// class DataService
 class DataService: DataServiceProtocol
 {
     var delegate: DataServiceDelegateProtocol?
@@ -103,6 +126,7 @@ class DataService: DataServiceProtocol
         return (amount: _transactionAmountInCents!, chipData: (_cardReader?.getChipData())!)
     }
     
+    //process a transaction though the transaction processor
     func processTransaction(transaction: (amount: Int, chipData: [(Int32, String, String)]), completion: @escaping (Bool)->()) -> Bool
     {
         delegate?.dataServiceStatus(status: "process transaction")
@@ -261,6 +285,7 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
         present(prompt, animated: true, completion: nil)
     }
     
+    /// clear the form
     func clearForm()
     {
         _amountText.text = ""
@@ -269,6 +294,7 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
         _nameLabel.text = ""
     }
     
+    /// disable the form
     func disableForm(disposition: Bool)
     {
         _amountText.isEnabled = !disposition
