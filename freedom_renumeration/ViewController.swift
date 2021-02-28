@@ -31,12 +31,14 @@ class CardReader
 class Processor
 {
     //returns true if the passed tag is found in the passed tuple
-    func containsTag(chipData: [(Int32, String, String)], tag: Int32) -> Bool
+    func containsTag(chipData: [(tag: Int32, description: String, value: String)], tag: Int32) -> Bool
     {
         var found: Bool = false
-        chipData.forEach
-        { (tagValue, _, _) in
-            if tagValue == tag
+        
+        //check array of tuples for passed tag
+        for chipRecord in chipData
+        {
+            if chipRecord.tag == tag
             {
                 found = true
             }
