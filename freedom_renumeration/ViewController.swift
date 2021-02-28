@@ -75,6 +75,7 @@ class Processor
             return false
         }
         
+        //simulate network processor request
         let seconds = 5.0
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds)
         {
@@ -86,6 +87,8 @@ class Processor
 }
 
 // MARK: - DATASERVICE
+/// data service delegate protocol
+/// could be used to send processing status messages to client
 protocol DataServiceDelegateProtocol
 {
     /// call delegate with status string
@@ -157,6 +160,9 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
     
     var _dataService: DataService?
     
+    /// data service status
+    /// used to show processing status messages
+    /// NOT USED
     func dataServiceStatus(status: String) {
         _dataServiceStatus.text = status
     }
@@ -185,6 +191,14 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
         return true
     }
     
+    /// submit clicked
+    /// hide keyboard and disable submit button
+    /// get chip data from data service and update ui
+    /// prompt user and process transaction if ok
+    /// start spinner, call through data service to process transaction
+    /// stop spinner in process transaction completion handler
+    /// alert user of transaction status
+    /// setup form for next transaction
     @IBAction func submitClicked(_ sender: UIButton) {
         //hide keyboard and disable submitbutton
         _amountText.resignFirstResponder()
@@ -224,10 +238,10 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
 
         prompt.addAction(
             UIAlertAction(
-                title: "Ok",
+                title: "Yes",
                 style: .default,
                 handler: { (action: UIAlertAction!) in
-                    print("OK")
+                    print("YES")
                     
                     //start spinner and disable amount field
                     self.disableForm(disposition: true)
@@ -236,7 +250,7 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
                     //process transaction
                     //invalid transaction will call completion(false)
                     _ = self._dataService?.processTransaction(transaction: returnData!)
-                    {success in
+                    { success in
                         print("\(success)")
                         
                         self._busyIndicator.stopAnimating()
@@ -264,10 +278,13 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
                                     print("OK")
                                 }))
                             
+                        // stop spinner
                         self._busyIndicator.stopAnimating()
                         
+                        // show alert with tranaction request status
                         self.present(alert, animated: true, completion: nil)
                         
+                        // setup form for next transaction
                         self.clearForm()
                         self.disableForm(disposition: false)
                     }
@@ -275,10 +292,10 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
 
         prompt.addAction(
             UIAlertAction(
-                title: "Cancel",
+                title: "No",
                 style: .cancel,
                 handler: { (action: UIAlertAction!) in
-                    print("CANCEL")
+                    print("NO")
                     self.clearForm()
                 }))
 
