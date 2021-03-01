@@ -7,6 +7,9 @@
 
 import UIKit
 
+typealias ChipData = [(tag: Int32, description: String, value: String)]
+typealias Transaction = (amount: Int, chipData: ChipData)
+
 // MARK: - CARD READER
 ///class CardReader
 ///mock card reader
@@ -14,7 +17,7 @@ class CardReader
 {
     //returns chip data as an array of tuples of ( In32, String, String ) ]
     //assume that the data is cached and that this is a short, synchronous operation
-    func getChipData() -> [(tag: Int32, description: String, value: String)]
+    func getChipData() -> ChipData
     {
         //return chip data
         return [
@@ -31,7 +34,7 @@ class CardReader
 class Processor
 {
     //returns true if the passed tag is found in the passed tuple
-    func containsTag(chipData: [(tag: Int32, description: String, value: String)], tag: Int32) -> Bool
+    func containsTag(chipData: ChipData, tag: Int32) -> Bool
     {
         var found: Bool = false
         
@@ -51,7 +54,7 @@ class Processor
     /// - Parameter transaction: tuple( amount, chipData)
     /// - Parameter completion: escaping completion handler that takes bool
     /// - Returns: true if valid transaction, otherwise false
-    func processTransaction(transaction: (amount: Int, chipData: [(Int32, String, String)] ), completion: @escaping (Bool)->()) -> Bool
+    func processTransaction(transaction: Transaction, completion: @escaping (Bool)->()) -> Bool
     {
         //did we get the right number of tags?
         guard transaction.chipData.count == 3 else {
@@ -105,12 +108,12 @@ protocol DataServiceProtocol
     /// start a transaction
     /// - Parameter TransactionAmountInCents transaction amount in cents
     /// - Returns: tuple of amount and chipdata which is array of tuple ( tag, string, string ) acquired from card reader
-    func startTransaction(TransactionAmountInCents amount: Int) -> (amount: Int, chipData: [(Int32, String, String)])
-    
+    func startTransaction(TransactionAmountInCents amount: Int) -> (amount: Int, chipData: ChipData)
+
     /// process transaction using transaction processor
     /// - Parameter transaction
     /// - Parameter escaping completion handler
-    func processTransaction(transaction: (amount: Int, chipData: [(Int32, String, String)] ), completion: @escaping (Bool)->()) -> Bool
+    func processTransaction(transaction: Transaction, completion: @escaping (Bool)->()) -> Bool
 }
 
 /// class DataService
@@ -121,7 +124,8 @@ class DataService: DataServiceProtocol
     
     //take   transaction amount in cents
     //return tuple of amount and chip data
-    func startTransaction(TransactionAmountInCents amount: Int) -> (amount: Int, chipData: [(Int32, String, String)]) {
+    func startTransaction(TransactionAmountInCents amount: Int) -> (amount: Int, chipData: ChipData)
+    {
         delegate?.dataServiceStatus(status: "start transaction")
         
         //set transaction amount
@@ -132,7 +136,7 @@ class DataService: DataServiceProtocol
     }
     
     //process a transaction though the transaction processor
-    func processTransaction(transaction: (amount: Int, chipData: [(Int32, String, String)]), completion: @escaping (Bool)->()) -> Bool
+    func processTransaction(transaction: Transaction, completion: @escaping (Bool)->()) -> Bool
     {
         delegate?.dataServiceStatus(status: "process transaction")
         let processor = Processor()
