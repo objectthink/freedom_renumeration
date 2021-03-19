@@ -10,6 +10,21 @@ import UIKit
 typealias ChipData = [(tag: Int32, description: String, value: String)]
 typealias Transaction = (amount: Int, chipData: ChipData)
 
+// MARK: - String extension to validate for number
+extension String {
+     struct NumFormatter {
+         static let instance = NumberFormatter()
+     }
+
+     var doubleValue: Double? {
+         return NumFormatter.instance.number(from: self)?.doubleValue
+     }
+
+     var integerValue: Int? {
+         return NumFormatter.instance.number(from: self)?.intValue
+     }
+}
+
 // MARK: - CARD READER
 ///class CardReader
 ///mock card reader
@@ -189,6 +204,16 @@ class ViewController: UIViewController, UITextFieldDelegate, DataServiceDelegate
     func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
         //control access to the submit button
         _submitButton.isEnabled = string != "" || string == "" && textField.text!.count > 1
+        
+        //only enable submit button if valid double
+        if let doubleValue = string.doubleValue
+        {
+            print("is valid: \(doubleValue)")
+        }
+        else
+        {
+            _submitButton.isEnabled = false
+        }
         
         //review values
         print("textField: \(textField.text!)")
